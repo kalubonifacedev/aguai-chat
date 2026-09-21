@@ -1,7 +1,7 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useTheme } from "next-themes";
 import Image from "next/image";
 import {
@@ -13,11 +13,11 @@ import {
   Sun,
   Moon,
   PenLine,
-  Mail,
   Copy,
   Check,
   X,
   Send,
+  Share2,
 } from "lucide-react";
 
 const DEVELOPER_EMAIL = "kalubonifacedev@gmail.com";
@@ -144,6 +144,133 @@ function ContributeModal({
 }
 
 /* -------------------------------------------------------------------------- */
+/*  Message Component with Copy & Web Share API                               */
+/* -------------------------------------------------------------------------- */
+
+function MessageItem({
+  message,
+  getText,
+  onContribute,
+}: {
+  message: any;
+  getText: (m: any) => string;
+  onContribute: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const textContent = message.parts
+    .map((p: any) => (p.type === "text" ? p.text : ""))
+    .join("");
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(textContent);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy:", err);
+    }
+  };
+
+  const handleShare = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: "Agu AI - Ututu Knowledge",
+          text: textContent,
+          url: window.location.href,
+        });
+      } catch (err) {
+        // User cancelled or share failed silently
+      }
+    } else {
+      handleCopy();
+    }
+  };
+
+  const textLower = getText(message);
+  const isMissing =
+    message.role !== "user" &&
+    (textLower.includes("not yet recorded") ||
+      textLower.includes("not recorded") ||
+      textLower.includes("isn't recorded") ||
+      textLower.includes("is not recorded"));
+
+  return (
+    <div
+      className={`group flex gap-3 ${
+        message.role === "user" ? "justify-end" : "justify-start"
+      }`}
+    >
+      {message.role !== "user" && (
+        <Image
+          src="/logo1.png"
+          alt="Agu Avatar"
+          width={28}
+          height={28}
+          className="h-7 w-7 rounded-full object-cover ring-1 ring-[#9C4A2B]/50 shrink-0"
+        />
+      )}
+      <div className="max-w-[85%] flex flex-col">
+        <div
+          className={`relative rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm ${
+            message.role === "user"
+              ? "bg-[#9C4A2B] text-white"
+              : "border border-neutral-200 bg-white text-neutral-800 dark:border-neutral-800/80 dark:bg-neutral-900/60 dark:text-neutral-200"
+          }`}
+        >
+          {message.parts.map((part: any, i: number) =>
+            part.type === "text" ? (
+              <span key={i} className="whitespace-pre-wrap">
+                {part.text}
+              </span>
+            ) : null,
+          )}
+        </div>
+
+        {/* Action Buttons (Copy & Share) */}
+        <div
+          className={`mt-1.5 flex items-center gap-1 text-xs text-neutral-400 ${
+            message.role === "user" ? "justify-end" : "justify-start"
+          }`}
+        >
+          <button
+            onClick={handleCopy}
+            className="flex items-center gap-1 rounded-md px-1.5 py-0.5 hover:bg-neutral-200/50 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 transition-colors"
+            title="Copy message"
+          >
+            {copied ? (
+              <Check size={13} className="text-emerald-500" />
+            ) : (
+              <Copy size={13} />
+            )}
+            <span className="text-[11px]">{copied ? "Copied" : "Copy"}</span>
+          </button>
+
+          <button
+            onClick={handleShare}
+            className="flex items-center gap-1 rounded-md px-1.5 py-0.5 hover:bg-neutral-200/50 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 transition-colors"
+            title="Share message"
+          >
+            <Share2 size={13} />
+            <span className="text-[11px]">Share</span>
+          </button>
+        </div>
+
+        {isMissing && (
+          <button
+            onClick={onContribute}
+            className="mt-2 flex items-center gap-1.5 text-xs font-medium text-[#9C4A2B] underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#9C4A2B]"
+          >
+            <PenLine size={13} />
+            Know the answer? Contact the developer
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
 /*  Chat page                                                                 */
 /* -------------------------------------------------------------------------- */
 
@@ -236,8 +363,8 @@ export default function ChatPage() {
         </div>
       </header>
 
-      {/* Main Container */}
-      <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 pb-40 pt-6">
+      {/* Main Container with generous bottom margin & padding so fixed input never covers content */}
+      <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 pb-48 pt-6">
         {/* Empty State / Welcome Screen */}
         {messages.length === 0 ? (
           <div className="my-auto flex flex-col items-center text-center">
@@ -300,62 +427,15 @@ export default function ChatPage() {
           </div>
         ) : (
           /* Message History Stream */
-          <div className="space-y-6">
-            {messages.map((m) => {
-              const text = getText(m);
-              const isMissing =
-                m.role !== "user" &&
-                (text.includes("not yet recorded") ||
-                  text.includes("not recorded") ||
-                  text.includes("isn't recorded") ||
-                  text.includes("is not recorded"));
-
-              return (
-                <div
-                  key={m.id}
-                  className={`flex gap-3 ${
-                    m.role === "user" ? "justify-end" : "justify-start"
-                  }`}
-                >
-                  {m.role !== "user" && (
-                    <Image
-                      src="/logo1.png"
-                      alt="Agu Avatar"
-                      width={28}
-                      height={28}
-                      className="h-7 w-7 rounded-full object-cover ring-1 ring-[#9C4A2B]/50"
-                    />
-                  )}
-                  <div className="max-w-[85%]">
-                    <div
-                      className={`rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm ${
-                        m.role === "user"
-                          ? "bg-[#9C4A2B] text-white"
-                          : "border border-neutral-200 bg-white text-neutral-800 dark:border-neutral-800/80 dark:bg-neutral-900/60 dark:text-neutral-200"
-                      }`}
-                    >
-                      {m.parts.map((part, i) =>
-                        part.type === "text" ? (
-                          <span key={i} className="whitespace-pre-wrap">
-                            {part.text}
-                          </span>
-                        ) : null,
-                      )}
-                    </div>
-
-                    {isMissing && (
-                      <button
-                        onClick={() => setContributeOpen(true)}
-                        className="mt-2 flex items-center gap-1.5 text-xs font-medium text-[#9C4A2B] underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#9C4A2B]"
-                      >
-                        <PenLine size={13} />
-                        Know the answer? Contact the developer
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+          <div className="space-y-6 mb-8">
+            {messages.map((m) => (
+              <MessageItem
+                key={m.id}
+                message={m}
+                getText={getText}
+                onContribute={() => setContributeOpen(true)}
+              />
+            ))}
 
             {status === "submitted" && (
               <div className="flex items-center gap-3">
@@ -376,10 +456,13 @@ export default function ChatPage() {
         )}
       </div>
 
-      {/* Floating Input Area */}
-      <div className="fixed bottom-0 left-0 right-0 z-30 bg-gradient-to-t from-slate-50 via-slate-50/90 to-transparent pb-4 pt-4 dark:from-[#0C0B0B] dark:via-[#0C0B0B]/90">
-        <div className="mx-auto max-w-3xl px-4">
-          <div className="relative rounded-3xl border border-neutral-200 bg-white/90 p-2 shadow-xl backdrop-blur-xl transition-all focus-within:border-[#9C4A2B]/80 focus-within:ring-1 focus-within:ring-[#9C4A2B]/80 dark:border-neutral-800 dark:bg-neutral-900/90">
+      {/* Floating Input Area with Ambient Glow */}
+      <div className="fixed bottom-0 left-0 right-0 z-30 bg-gradient-to-t from-slate-50 via-slate-50/90 to-transparent pb-4 pt-6 dark:from-[#0C0B0B] dark:via-[#0C0B0B]/90">
+        <div className="relative mx-auto max-w-3xl px-4">
+          {/* Ambient Glowing Effect */}
+          <div className="absolute -inset-1 rounded-[2.5rem] bg-gradient-to-r from-[#9C4A2B]/30 via-[#9C4A2B]/10 to-[#9C4A2B]/30 blur-lg opacity-70 pointer-events-none transition-all duration-300"></div>
+
+          <div className="relative rounded-3xl border border-neutral-200/90 bg-white/95 p-2 shadow-2xl backdrop-blur-xl transition-all focus-within:border-[#9C4A2B] focus-within:ring-2 focus-within:ring-[#9C4A2B]/30 dark:border-neutral-800/90 dark:bg-neutral-900/95">
             <textarea
               rows={2}
               value={input}
